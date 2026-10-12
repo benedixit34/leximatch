@@ -1,0 +1,174 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    font-family: 'Fredoka', sans-serif;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    background: #090d16;
+    color: #f8fafc;
+}
+
+/* ---------- Generated background art ----------
+   Swap any URL below for a local path (e.g. url('assets/bg-vienna.png'))
+   if you download the images into an assets/ folder. */
+:root {
+    --img-map:      url('https://api.blueprintstudio.ai/storage/v1/object/public/asset-generator/1e6a6d42-026a-4fe3-a3f5-a2fdf6d57051/1790860593378-lyr19s.png');
+    --img-vienna:   url('https://api.blueprintstudio.ai/storage/v1/object/public/asset-generator/1e6a6d42-026a-4fe3-a3f5-a2fdf6d57051/1790860569908-mdv0qb.png');
+    --img-berlin:   url('https://api.blueprintstudio.ai/storage/v1/object/public/asset-generator/1e6a6d42-026a-4fe3-a3f5-a2fdf6d57051/1790860571925-slrset.png');
+    --img-munich:   url('https://api.blueprintstudio.ai/storage/v1/object/public/asset-generator/1e6a6d42-026a-4fe3-a3f5-a2fdf6d57051/1790860580048-ft53bq.png');
+    --img-hamburg:  url('https://api.blueprintstudio.ai/storage/v1/object/public/asset-generator/1e6a6d42-026a-4fe3-a3f5-a2fdf6d57051/1790860585087-nig3r8.png');
+    --img-honolulu: url('https://api.blueprintstudio.ai/storage/v1/object/public/asset-generator/1e6a6d42-026a-4fe3-a3f5-a2fdf6d57051/1790860587406-yjcr2u.png');
+    /* Soft scrim keeps header text and the bottom tray readable over the art */
+    --scrim: linear-gradient(180deg, rgba(15,23,42,0.35) 0%, rgba(15,23,42,0) 22%, rgba(15,23,42,0) 62%, rgba(15,23,42,0.28) 100%);
+}
+
+/* Dynamic City Background Themes (image on top, original gradient as fallback while loading) */
+.bg-theme-vienna {
+    background: var(--scrim), var(--img-vienna) center bottom / cover no-repeat,
+                linear-gradient(180deg, #38bdf8 0%, #818cf8 35%, #c084fc 70%, #f472b6 100%);
+}
+.bg-theme-berlin {
+    background: var(--scrim), var(--img-berlin) center bottom / cover no-repeat,
+                linear-gradient(180deg, #0284c7 0%, #0d9488 40%, #059669 75%, #10b981 100%);
+}
+.bg-theme-munich {
+    background: var(--scrim), var(--img-munich) center bottom / cover no-repeat,
+                linear-gradient(180deg, #6366f1 0%, #8b5cf6 40%, #a855f7 75%, #ec4899 100%);
+}
+.bg-theme-hamburg {
+    background: var(--scrim), var(--img-hamburg) center bottom / cover no-repeat,
+                linear-gradient(180deg, #0f172a 0%, #1e293b 35%, #0284c7 70%, #38bdf8 100%);
+}
+.bg-theme-honolulu {
+    background: var(--scrim), var(--img-honolulu) center bottom / cover no-repeat,
+                linear-gradient(180deg, #0ea5e9 0%, #06b6d4 40%, #14b8a6 75%, #f59e0b 100%);
+}
+
+/* Map Canvas Background (shell) */
+.bg-map-theme {
+    background: radial-gradient(circle at 50% 30%, #1e293b 0%, #0f172a 70%, #020617 100%);
+}
+
+/* Map viewport artwork */
+.map-viewport {
+    background: var(--img-map) center / cover no-repeat, #0b1a3a;
+}
+
+/* 3D Perspective Card Flipping */
+.card-perspective {
+    perspective: 1000px;
+}
+
+.card-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-style: preserve-3d;
+}
+
+.card-inner.is-flipped {
+    transform: rotateY(180deg);
+}
+
+.card-front, .card-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    border-radius: 1.1rem;
+}
+
+/* Card Facedown Pattern */
+.card-front {
+    background: linear-gradient(135deg, #f43f5e 0%, #e11d48 50%, #be123c 100%);
+    border: 3.5px solid #fecdd3;
+    box-shadow: 0 6px 0 #9f1239, inset 0 2px 4px rgba(255,255,255,0.4);
+}
+
+.card-front::before {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border: 2px dashed rgba(255, 255, 255, 0.4);
+    border-radius: 0.7rem;
+}
+
+/* Card Faceup Content */
+.card-back {
+    transform: rotateY(180deg);
+    box-shadow: 0 6px 0 #d97706, inset 0 2px 4px rgba(255,255,255,0.8);
+}
+
+.card-back-word {
+    background: linear-gradient(180deg, #ffffff 0%, #fffbeb 60%, #fef3c7 100%);
+    border: 3.5px solid #f59e0b;
+}
+
+.card-back-image {
+    background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 60%, #dcfce7 100%);
+    border: 3.5px solid #10b981;
+    box-shadow: 0 6px 0 #047857, inset 0 2px 4px rgba(255,255,255,0.8);
+}
+
+/* Active Card Selection Highlight */
+.card-selected .card-inner {
+    transform: scale(1.06) rotateY(180deg);
+}
+.card-selected .card-back {
+    box-shadow: 0 0 22px #f59e0b, 0 6px 0 #d97706;
+    border-color: #fbbf24;
+}
+
+/* Error Shake Animation */
+@keyframes cardShake {
+    0%, 100% { transform: rotateY(180deg) translateX(0); }
+    20%, 60% { transform: rotateY(180deg) translateX(-8px); }
+    40%, 80% { transform: rotateY(180deg) translateX(8px); }
+}
+.animate-shake .card-inner {
+    animation: cardShake 0.4s ease-in-out;
+}
+
+/* Card Match Pop */
+@keyframes popMatch {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.18); }
+    100% { transform: scale(0); opacity: 0; }
+}
+.animate-pop-match {
+    animation: popMatch 0.5s ease forwards;
+}
+
+/* Mascot Pulse & Jump on Map */
+@keyframes mascotBounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-12px) scale(1.1); }
+}
+.animate-mascot {
+    animation: mascotBounce 1.6s ease-in-out infinite;
+}
+
+/* Floating Drag Mirror */
+.drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    transform: scale(1.1) rotate(5deg);
+    box-shadow: 0 20px 35px rgba(0,0,0,0.4);
+}
+
+.glossy-pill {
+    background: linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.15) 100%);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
