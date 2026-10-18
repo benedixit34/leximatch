@@ -1,174 +1,200 @@
-import type { TtsSession } from '@mintplex-labs/piper-tts-web';
-
-/**
- * German text-to-speech using Piper (neural voice, runs fully in the browser via WASM).
- *
- * - The voice model (~63 MB) is downloaded once on the first visit and cached by the browser.
- * - Until it is ready (or if it fails to load) the browser's built-in voice is used instead,
- *   so tapping a card is never silent.
- * - Each word is rendered once and cached, so repeat taps are instant.
- */
-
-// Any key from `await tts.voices()` works. German options: de_DE-thorsten-medium (default),
-// de_DE-thorsten-high (114 MB, best), de_DE-thorsten-low (63 MB), de_DE-eva_k-x_low (21 MB, smallest).
-const VOICE_ID = 'de_DE-thorsten-medium';
-
-// Tiny silent clip, played once on the first tap so iOS/Safari allows later programmatic playback
-const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
-
 export type VoiceStatus = 'idle' | 'loading' | 'ready' | 'error';
+
 export interface VoiceState {
-    status: VoiceStatus;
-    /** Model download progress, 0..1 */
-    progress: number;
+  status: VoiceStatus;
+  progress: number;
 }
 
-export class GermanSpeechEngine {
-    state: VoiceState = { status: 'idle', progress: 0 };
+export interface TTSOptions {
+  voiceIndex?: number;
+  pitch?: number;
+  rate?: number;
+  volume?: number;
+  lang?: string;
+  onStart?: () => void;
+  onEnd?: () => void;
+  onError?: (event: SpeechSynthesisErrorEvent) => void;
+}
 
-    private listeners = new Set<(s: VoiceState) => void>();
-    private session?: TtsSession;
-    private loading?: Promise<void>;
-    private queue: Promise<unknown> = Promise.resolve(); // Piper renders one text at a time
-    private cache = new Map<string, string>();            // word -> blob URL
-    private inflight = new Map<string, Promise<string | null>>();
-    private el?: HTMLAudioElement;
-    private unlocked = false;
-    private reqId = 0;
+export class TextToSpeech {
+  protected synth?: SpeechSynthesis;
+  protected utterance: SpeechSynthesisUtterance | null = null;
 
-    // Fallback: browser voice
-    private synth?: SpeechSynthesis;
-    private deVoice?: SpeechSynthesisVoice;
+  constructor() {
+    // Don't throw when unsupported (some in-app browsers): the game just stays silent instead of crashing.
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      this.synth = window.speechSynthesis;
+    }
+  }
 
-    constructor() {
-        if (typeof Audio !== 'undefined') this.el = new Audio();
-        this.synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
-        this.initBrowserVoice();
+  public get isSupported(): boolean {
+    return !!this.synth;
+  }
+
+  public speak(text: string, options: TTSOptions = {}): void {
+    if (!this.synth) return;
+    if (this.synth.speaking) {
+      this.synth.cancel();
     }
 
-    // ---------- status ----------
-    subscribe(fn: (s: VoiceState) => void): () => void {
-        this.listeners.add(fn);
-        fn(this.state);
-        return () => { this.listeners.delete(fn); };
+    this.utterance = new SpeechSynthesisUtterance(text);
+    this.utterance.pitch = options.pitch ?? 1;
+    this.utterance.rate = options.rate ?? 1;
+    this.utterance.volume = options.volume ?? 1;
+    if (options.lang) {
+      this.utterance.lang = options.lang;
     }
 
-    private setState(patch: Partial<VoiceState>) {
-        this.state = { ...this.state, ...patch };
-        this.listeners.forEach((fn) => fn(this.state));
+    const voices = this.synth.getVoices();
+    if (options.voiceIndex !== undefined && voices[options.voiceIndex]) {
+      this.utterance.voice = voices[options.voiceIndex];
     }
 
-    // ---------- loading the Piper voice ----------
-    /** Call from the first user gesture: unlocks playback on iOS and starts loading the voice. */
-    unlock() {
-        if (!this.unlocked && this.el) {
-            this.unlocked = true;
-            this.el.src = SILENT_WAV;
-            Promise.resolve(this.el.play()).then(() => this.el?.pause()).catch(() => {});
-        }
-        void this.load();
+    if (options.onStart) this.utterance.onstart = options.onStart;
+    if (options.onEnd) this.utterance.onend = options.onEnd;
+    if (options.onError) this.utterance.onerror = options.onError;
+
+    this.synth.speak(this.utterance);
+  }
+
+  public pause(): void {
+    if (this.synth?.speaking) this.synth.pause();
+  }
+
+  public resume(): void {
+    if (this.synth?.paused) this.synth.resume();
+  }
+
+  public stop(): void {
+    if (this.synth && (this.synth.speaking || this.synth.paused)) this.synth.cancel();
+  }
+
+  public getVoices(): SpeechSynthesisVoice[] {
+    return this.synth?.getVoices() ?? [];
+  }
+}
+
+export class GermanSpeechEngine extends TextToSpeech {
+  /** The browser voice needs no download, so it is always "ready". Kept so the game's voice-status code keeps working. */
+  public state: VoiceState = { status: 'ready', progress: 1 };
+
+  constructor() {
+    super();
+  }
+
+  /** Best installed German voice: prefers de-DE, accepts de-AT / de-CH. Android reports "de_DE" with an underscore. */
+  private findGermanVoiceIndex(): number {
+    const voices = this.getVoices();
+    const lang = (v: SpeechSynthesisVoice) => v.lang.toLowerCase().replace('_', '-');
+    const exact = voices.findIndex((v) => lang(v) === 'de-de');
+    return exact !== -1 ? exact : voices.findIndex((v) => lang(v).startsWith('de'));
+  }
+
+  public speakGerman(text: string, options: Omit<TTSOptions, 'lang'> = {}): void {
+    const germanVoiceIndex = this.findGermanVoiceIndex();
+
+    super.speak(text, {
+      ...options,
+      lang: 'de-DE',
+      rate: options.rate ?? 0.88, // slightly slow for language learning
+      voiceIndex: options.voiceIndex ?? (germanVoiceIndex !== -1 ? germanVoiceIndex : undefined),
+    });
+  }
+
+  /** Chrome loads its voice list asynchronously. Resolves when voices are available (or after `timeoutMs`). */
+  public whenVoicesReady(timeoutMs = 1500): Promise<void> {
+    const synth = this.synth;
+    if (!synth || synth.getVoices().length > 0) return Promise.resolve();
+    return new Promise((resolve) => {
+      const finish = () => {
+        synth.removeEventListener('voiceschanged', finish);
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(finish, timeoutMs);
+      synth.addEventListener('voiceschanged', finish);
+    });
+  }
+
+  // ---- Used by the game hook. Nothing to do for the browser voice. ----
+  public subscribe(fn: (s: VoiceState) => void): () => void {
+    fn(this.state);
+    return () => {};
+  }
+
+  /** Called on the first tap. Touching getVoices() makes Chrome start loading its voice list. */
+  public unlock(): void {
+    this.getVoices();
+  }
+
+  /** The browser voice speaks on demand, so there is nothing to pre-render. */
+  public async warm(_words: string[]): Promise<void> {}
+}
+
+// @ts-ignore
+const SpeechRecognitionAPI = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
+
+export interface STTOptions {
+  language?: string;
+  continuous?: boolean;
+  interimResults?: boolean;
+  onResult: (transcript: string, isFinal: boolean) => void;
+  onError?: (error: any) => void;
+  onEnd?: () => void;
+}
+
+export class SpeechToText {
+  private recognition: any = null;
+
+  constructor() {
+    if (SpeechRecognitionAPI) {
+      this.recognition = new SpeechRecognitionAPI();
+    }
+  }
+
+  public start(options: STTOptions): void {
+    if (!this.recognition) {
+      console.warn('Speech Recognition is not available in this environment.');
+      return;
     }
 
-    load(): Promise<void> {
-        if (this.loading) return this.loading;
-        this.setState({ status: 'loading', progress: 0 });
-        this.loading = (async () => {
-            try {
-                // Imported lazily so nothing Piper-related runs during server rendering
-                const { TtsSession } = await import('@mintplex-labs/piper-tts-web');
-                this.session = await TtsSession.create({
-                    voiceId: VOICE_ID,
-                    progress: (p) => {
-                        if (p.url.endsWith('.onnx') && p.total) {
-                            this.setState({ progress: Math.min(1, p.loaded / p.total) });
-                        }
-                    },
-                });
-                this.setState({ status: 'ready', progress: 1 });
-            } catch (err) {
-                console.warn('Piper voice failed to load, using the browser voice instead.', err);
-                this.setState({ status: 'error' });
-            }
-        })();
-        return this.loading;
-    }
+    this.recognition.lang = options.language || 'de-DE';
+    this.recognition.continuous = options.continuous ?? false;
+    this.recognition.interimResults = options.interimResults ?? true;
 
-    // ---------- rendering ----------
-    private render(text: string): Promise<string | null> {
-        const hit = this.cache.get(text);
-        if (hit) return Promise.resolve(hit);
-        const pending = this.inflight.get(text);
-        if (pending) return pending;
+    this.recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
 
-        const job = this.queue.then(() => this.session!.predict(text));
-        this.queue = job.catch(() => {});
-        const p = job
-            .then((blob) => {
-                const url = URL.createObjectURL(blob);
-                this.cache.set(text, url);
-                return url;
-            })
-            .catch((err) => {
-                console.warn('Piper could not render', text, err);
-                return null;
-            })
-            .finally(() => this.inflight.delete(text));
-        this.inflight.set(text, p);
-        return p;
-    }
-
-    /** Pre-render words in the background (e.g. a level's vocabulary) so taps play instantly. */
-    async warm(words: string[]) {
-        await this.load();
-        if (this.state.status !== 'ready') return;
-        for (const w of new Set(words)) {
-            if (!this.cache.has(w)) await this.render(w);
-        }
-    }
-
-    // ---------- speaking ----------
-    async speak(text: string) {
-        const id = ++this.reqId;
-        this.stop();
-
-        let url = this.cache.get(text) ?? null;
-        if (!url) {
-            if (this.state.status === 'ready') url = await this.render(text);
-            else void this.load(); // not ready yet: start loading and use the browser voice for now
-        }
-        if (id !== this.reqId) return; // the player already tapped something else
-
-        if (url && this.el) {
-            this.el.src = url;
-            this.el.currentTime = 0;
-            Promise.resolve(this.el.play()).catch(() => this.speakWithBrowserVoice(text));
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
         } else {
-            this.speakWithBrowserVoice(text);
+          interimTranscript += event.results[i][0].transcript;
         }
-    }
+      }
 
-    stop() {
-        this.el?.pause();
-        this.synth?.cancel();
-    }
+      const transcript = finalTranscript || interimTranscript;
+      options.onResult(transcript, !!finalTranscript);
+    };
 
-    // ---------- fallback: browser voice ----------
-    private initBrowserVoice() {
-        if (!this.synth) return;
-        const update = () => {
-            this.deVoice = this.synth!.getVoices().find((v) => v.lang.toLowerCase().includes('de'));
-        };
-        update();
-        if (this.synth.onvoiceschanged !== undefined) this.synth.onvoiceschanged = update;
-    }
+    if (options.onError) this.recognition.onerror = (e: any) => options.onError!(e);
+    if (options.onEnd) this.recognition.onend = () => options.onEnd!();
 
-    private speakWithBrowserVoice(text: string) {
-        if (!this.synth) return;
-        this.synth.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'de-DE';
-        utterance.rate = 0.88; // slightly slow for language learning
-        if (this.deVoice) utterance.voice = this.deVoice;
-        this.synth.speak(utterance);
+    try {
+      this.recognition.start();
+    } catch (e) {
+      console.error('Error starting speech recognition:', e);
     }
+  }
+
+  public stop(): void {
+    if (this.recognition) {
+      try {
+        this.recognition.stop();
+      } catch (e) {
+        console.error('Error stopping speech recognition:', e);
+      }
+    }
+  }
 }

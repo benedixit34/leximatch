@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CITIES } from '@/data/cities';
-import { getAudio, speak } from '@/lib/audio';
+import { getAudio, speak, type VoiceState } from '@/lib/audio';
 import { buildDeck } from '@/lib/utils';
 import type { CardData, ModalId, Screen } from '@/lib/types';
+
 
 const LEVEL_SECONDS = 180;
 const START_CURRENCY = 230;
@@ -35,6 +36,7 @@ export function useGame() {
   const [modal, setModal] = useState<ModalId>(null);
   const [toast, setToast] = useState({ msg: '', visible: false });
   const [musicOn, setMusicOn] = useState(true);
+  const [voice, setVoice] = useState<VoiceState>({ status: 'idle', progress: 0 });
 
   const city = CITIES[selectedIdx];
 
@@ -66,6 +68,8 @@ export function useGame() {
     setCleared(false);
     setPaused(false);
     setModal(null);
+    // Pre-render this level's German words so tapping a card plays instantly
+    void getAudio().speech.warm(CITIES[idx].pairs.map((p) => p.german));
   }, []);
 
   const startLevel = () => {
@@ -81,7 +85,7 @@ export function useGame() {
 
   const selectCity = (idx: number) => {
     if (idx <= unlockedIdx) setSelectedIdx(idx);
-    else showToast(`Clear Level ${idx} to unlock ${CITIES[idx].name}!`);
+    else showToast(`Clear Level ${idx} to unlock ${CITIES[idx].venue}!`);
   };
 
   // ---- Timer ----
@@ -196,14 +200,15 @@ export function useGame() {
 
   // ---- Music ----
   useEffect(() => {
-    const { music } = getAudio();
+    const { music, speech } = getAudio();
     setMusicOn(music.enabled);
-    const unlock = () => music.start(); // browsers only allow audio after a user gesture
-    const onVisibility = () => {
-      if (!music.ctx) return;
-      if (document.hidden) music.ctx.suspend();
-      else music.ctx.resume();
+    const stopVoiceUpdates = speech.subscribe(setVoice);
+    const unlock = () => {
+      // browsers only allow audio after a user gesture
+      music.start();
+      speech.unlock();
     };
+    const onVisibility = () => (document.hidden ? music.pause() : music.resume());
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
     document.addEventListener('visibilitychange', onVisibility);
@@ -211,12 +216,9 @@ export function useGame() {
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
       document.removeEventListener('visibilitychange', onVisibility);
+      stopVoiceUpdates();
     };
   }, []);
-
-  useEffect(() => {
-    getAudio().music.setMode(screen === 'map' ? 'map' : city.theme);
-  }, [screen, city.theme]);
 
   const toggleMusic = () => setMusicOn(getAudio().music.toggle());
 
@@ -224,7 +226,7 @@ export function useGame() {
     // state
     screen, city, cities: CITIES, unlockedIdx, selectedIdx, levelStars, coins, gems,
     totalMatches, streak, deck, flipped, shaking, matched, hinted, timeLeft, paused,
-    earnedStars, modal, toast, musicOn,
+    earnedStars, modal, toast, musicOn, voice,
     // actions
     setModal, selectCity, startLevel, backToMap, restartLevel, flipCard, canStartDrag,
     requestHint, share, pause, resume, continueAfterVictory, toggleMusic, speak,

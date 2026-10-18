@@ -2,7 +2,7 @@ import { MusicEngine } from './music';
 import { SoundSynth } from './sfx';
 import { GermanSpeechEngine } from './speech';
 
-export type { MusicMode } from './music';
+export type { VoiceState } from './speech';
 
 interface AudioEngines {
   music: MusicEngine;
@@ -24,5 +24,5 @@ export function getAudio(): AudioEngines {
 export function speak(text: string): void {
   const { music, speech } = getAudio();
   music.duck();
-  speech.speak(text);
+  speech.speakGerman(text);
 }
