@@ -172,3 +172,72 @@ body {
     -ms-overflow-style: none;
     scrollbar-width: none;
 }
+
+
+.victory-ribbon {
+    position: relative;
+    background: linear-gradient(180deg, #f472b6 0%, #db2777 55%, #be185d 100%);
+    box-shadow: 0 4px 0 #831843, 0 8px 14px rgba(0, 0, 0, 0.35);
+}
+.victory-ribbon::before,
+.victory-ribbon::after {
+    content: '';
+    position: absolute;
+    top: 12px;
+    width: 30px;
+    height: 100%;
+    background: linear-gradient(180deg, #be185d, #701a45);
+    z-index: -1;
+}
+.victory-ribbon::before { left: -20px; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 28% 50%); }
+.victory-ribbon::after  { right: -20px; clip-path: polygon(0 0, 100% 0, 72% 50%, 100% 100%, 0 100%); }
+
+/* Teal Continue button with the same folded tails */
+.victory-continue {
+    position: relative;
+    border-radius: 0.6rem;
+    background: linear-gradient(180deg, #2dd4bf 0%, #0d9488 60%, #0f766e 100%);
+    box-shadow: 0 4px 0 #134e4a, 0 8px 12px rgba(0, 0, 0, 0.3);
+}
+.victory-continue::before,
+.victory-continue::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    width: 14px;
+    height: 100%;
+    background: linear-gradient(180deg, #0f766e, #134e4a);
+    z-index: -1;
+}
+.victory-continue::before { left: -10px; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 35% 50%); }
+.victory-continue::after  { right: -10px; clip-path: polygon(0 0, 65% 50%, 100% 100%, 0 100%, 100% 0); }
+
+@keyframes victoryIn {
+    0%   { opacity: 0; transform: translateY(24px) scale(0.92); }
+    60%  { opacity: 1; transform: translateY(-4px) scale(1.02); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-victory-in { animation: victoryIn 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+
+@keyframes starPop {
+    0%   { opacity: 0; transform: scale(0) rotate(-30deg); }
+    70%  { opacity: 1; transform: scale(1.25) rotate(6deg); }
+    100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+.animate-star-pop { animation: starPop 0.5s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+    .animate-victory-in, .animate-star-pop { animation: none; }
+}
+
+/* Guide character on the loading screen: gentle float */
+@keyframes guideFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+.animate-guide {
+    animation: guideFloat 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .animate-guide { animation: none; }
+}

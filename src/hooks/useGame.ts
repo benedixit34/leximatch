@@ -6,9 +6,23 @@ import { getAudio, speak, type VoiceState } from '@/lib/audio';
 import { buildDeck } from '@/lib/utils';
 import type { CardData, ModalId, Screen } from '@/lib/types';
 
-
 const LEVEL_SECONDS = 180;
 const START_CURRENCY = 230;
+const LEVEL_BONUS_COINS = 150;
+const LEVEL_BONUS_GEMS = 75;
+
+/** Everything the victory screen shows about the level the player just cleared. */
+export interface LevelResult {
+  /** Seconds it took to clear the level */
+  seconds: number;
+  /** % of pair attempts that were correct (100 = no mistakes) */
+  accuracy: number;
+  /** Faster than the player's previous best for this level (or the first clear) */
+  newBest: boolean;
+  stars: number;
+  coins: number;
+  gems: number;
+}
 
 export function useGame() {
   // ---- Progress / meta-game ----
@@ -30,7 +44,8 @@ export function useGame() {
   const [timeLeft, setTimeLeft] = useState(LEVEL_SECONDS);
   const [paused, setPaused] = useState(false);
   const [cleared, setCleared] = useState(false);
-  const [earnedStars, setEarnedStars] = useState(0);
+  const [result, setResult] = useState<LevelResult | null>(null);
+  const [bestTimes, setBestTimes] = useState<(number | null)[]>(() => CITIES.map(() => null));
 
   // ---- UI ----
   const [modal, setModal] = useState<ModalId>(null);
@@ -41,8 +56,9 @@ export function useGame() {
   const city = CITIES[selectedIdx];
 
   // Fresh values for timeouts/pointer handlers (avoids stale closures)
-  const live = useRef({ deck, matched, paused, timeLeft, selectedIdx, coins });
-  live.current = { deck, matched, paused, timeLeft, selectedIdx, coins };
+  const live = useRef({ deck, matched, paused, timeLeft, selectedIdx, coins, bestTimes });
+  live.current = { deck, matched, paused, timeLeft, selectedIdx, coins, bestTimes };
+  const mistakes = useRef(0); // wrong pairs in the current level, used for accuracy
   const flippedRef = useRef<string[]>([]); // synchronous mirror so two quick taps / a drag-drop both register
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -66,6 +82,8 @@ export function useGame() {
     setHinted(null);
     setTimeLeft(LEVEL_SECONDS);
     setCleared(false);
+    setResult(null);
+    mistakes.current = 0;
     setPaused(false);
     setModal(null);
     // Pre-render this level's German words so tapping a card plays instantly
@@ -102,15 +120,23 @@ export function useGame() {
   // ---- Cards ----
   const handleVictory = useCallback(() => {
     const idx = live.current.selectedIdx;
-    const t = live.current.timeLeft;
-    const stars = t > 100 ? 3 : t > 50 ? 2 : 1;
+    const timeLeftNow = live.current.timeLeft;
+    const stars = timeLeftNow > 100 ? 3 : timeLeftNow > 50 ? 2 : 1;
+
+    const seconds = LEVEL_SECONDS - timeLeftNow;
+    const pairs = CITIES[idx].pairs.length;
+    const accuracy = Math.round((pairs / (pairs + mistakes.current)) * 100);
+    const previousBest = live.current.bestTimes[idx];
+    const newBest = previousBest === null || seconds < previousBest;
+
     getAudio().sfx.playVictory();
     setCleared(true);
-    setEarnedStars(stars);
-    setLevelStars((prev) => prev.map((s, i) => (i === idx ? Math.max(s, stars) : s)));
+    setResult({ seconds, accuracy, newBest, stars, coins: LEVEL_BONUS_COINS, gems: LEVEL_BONUS_GEMS });
+    if (newBest) setBestTimes((prev) => prev.map((b, i) => (i === idx ? seconds : b)));
+    setLevelStars((prev) => prev.map((st, i) => (i === idx ? Math.max(st, stars) : st)));
     setUnlockedIdx((u) => (idx === u && u < CITIES.length - 1 ? u + 1 : u));
-    setCoins((c) => c + 150);
-    setGems((g) => g + 75);
+    setCoins((c) => c + LEVEL_BONUS_COINS);
+    setGems((g) => g + LEVEL_BONUS_GEMS);
     setTimeout(() => setModal('victory'), 600);
   }, []);
 
@@ -136,6 +162,7 @@ export function useGame() {
         }, 400);
       } else {
         sfx.playError();
+        mistakes.current += 1;
         setStreak(0);
         setShaking([aId, bId]);
         setTimeout(() => {
@@ -226,7 +253,7 @@ export function useGame() {
     // state
     screen, city, cities: CITIES, unlockedIdx, selectedIdx, levelStars, coins, gems,
     totalMatches, streak, deck, flipped, shaking, matched, hinted, timeLeft, paused,
-    earnedStars, modal, toast, musicOn, voice,
+    result, modal, toast, musicOn, voice,
     // actions
     setModal, selectCity, startLevel, backToMap, restartLevel, flipCard, canStartDrag,
     requestHint, share, pause, resume, continueAfterVictory, toggleMusic, speak,

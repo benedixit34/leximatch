@@ -3,7 +3,8 @@
 import { useGame } from '@/hooks/useGame';
 import GameScreen from './GameScreen';
 import MapScreen from './MapScreen';
-import { PauseModal, Toast, TrophyModal, VictoryModal } from './Modals';
+import { PauseModal, Toast, TrophyModal } from './Modals';
+import VictoryModal from './VictoryModal';
 
 export default function GameRoot() {
   const game = useGame();

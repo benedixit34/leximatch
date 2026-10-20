@@ -56,40 +56,6 @@ export function TrophyModal({ game }: { game: GameApi }) {
   );
 }
 
-export function VictoryModal({ game }: { game: GameApi }) {
-  if (game.modal !== 'victory') return null;
-  return (
-    <div className={`${overlay} bg-slate-950/85`}>
-      <div className="bg-slate-900 border-4 border-pink-500 rounded-3xl p-6 max-w-xs w-full text-center space-y-4 shadow-2xl text-white">
-        <div className="text-5xl animate-bounce">🎉</div>
-        <h2 className="text-2xl font-black text-amber-300 tracking-wide uppercase">CITY CLEARED!</h2>
-        <p className="text-xs text-slate-300 font-semibold">Ausgezeichnet! You mastered this city!</p>
-        <div className="flex justify-center text-3xl gap-2 py-1">
-          {[1, 2, 3].map((n) => (
-            <span key={n} className={n <= game.earnedStars ? '' : 'grayscale opacity-40'}>⭐</span>
-          ))}
-        </div>
-        <div className="bg-slate-800/90 rounded-2xl p-3 border border-slate-700 font-mono text-xs space-y-1.5">
-          <div className="flex justify-between">
-            <span className="text-slate-400">Level Bonus:</span>
-            <span className="font-bold text-amber-300">+150 🪙</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-400">Gem Reward:</span>
-            <span className="font-bold text-pink-300">+75 💎</span>
-          </div>
-        </div>
-        <button
-          onClick={game.continueAfterVictory}
-          className="w-full py-3 bg-gradient-to-r from-emerald-400 to-cyan-500 border-2 border-white text-slate-950 font-black rounded-2xl shadow-lg active:scale-95 transition uppercase tracking-wider"
-        >
-          CONTINUE ON MAP ➔
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export function Toast({ game }: { game: GameApi }) {
   return (
     <div
