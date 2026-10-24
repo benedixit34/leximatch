@@ -1,5 +1,8 @@
 import type { CardData } from '@/lib/types';
 
+/** Letters on the back of every card */
+const CARD_BADGE = 'AE';
+
 interface CardProps {
   card: CardData;
   flipped: boolean;
@@ -8,13 +11,15 @@ interface CardProps {
   hinted?: boolean;
   /** Render as the floating drag preview (no id, no handlers) */
   ghost?: boolean;
+  /** Faint decoration on the card back (an emoji) */
+  watermark?: string;
   onFlip?: (cardId: string) => void;
   onSpeak?: (text: string) => void;
   onPointerDown?: (e: React.PointerEvent<HTMLDivElement>, card: CardData) => void;
 }
 
 export default function Card({
-  card, flipped, matched, shaking, hinted, ghost, onFlip, onSpeak, onPointerDown,
+  card, flipped, matched, shaking, hinted, ghost, watermark, onFlip, onSpeak, onPointerDown,
 }: CardProps) {
   const isWord = card.type === 'word';
 
@@ -24,7 +29,7 @@ export default function Card({
       onClick={() => onFlip?.(card.cardId)}
       onPointerDown={(e) => onPointerDown?.(e, card)}
       className={[
-        'card-perspective aspect-[3/4] cursor-pointer touch-none rounded-[1.1rem] transition',
+        'card-perspective h-full w-full cursor-pointer touch-none rounded-[0.9rem] transition',
         shaking && 'animate-shake',
         flipped && !matched && 'card-selected',
         hinted && 'ring-4 ring-amber-400 scale-105',
@@ -32,8 +37,13 @@ export default function Card({
       ].filter(Boolean).join(' ')}
     >
       <div className={`card-inner ${flipped || matched ? 'is-flipped' : ''}`}>
-        <div className="card-front flex items-center justify-center">
-          <span className="text-white/80 font-black text-xs font-mono drop-shadow">DE</span>
+        <div className="card-front flex flex-col items-center pt-2">
+          <span className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full border border-white/80 bg-white/55 text-[9px] font-black text-fuchsia-700">
+            {CARD_BADGE}
+          </span>
+          <span aria-hidden className="relative z-10 mt-1.5 text-2xl opacity-30 grayscale">
+            {watermark}
+          </span>
         </div>
         <div
           className={`card-back ${isWord ? 'card-back-word' : 'card-back-image'} p-1 flex flex-col items-center justify-between text-center relative`}

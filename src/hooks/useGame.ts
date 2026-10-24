@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CITIES } from '@/data/cities';
 import { getAudio, speak, type VoiceState } from '@/lib/audio';
-import { buildDeck } from '@/lib/utils';
+import { buildDeck, shuffle } from '@/lib/utils';
 import type { CardData, ModalId, Screen } from '@/lib/types';
 
 const LEVEL_SECONDS = 180;
 const START_CURRENCY = 230;
+export const HINT_COST = 20;
+export const SHUFFLES_PER_LEVEL = 3;
 const LEVEL_BONUS_COINS = 150;
 const LEVEL_BONUS_GEMS = 75;
 
@@ -44,6 +46,7 @@ export function useGame() {
   const [timeLeft, setTimeLeft] = useState(LEVEL_SECONDS);
   const [paused, setPaused] = useState(false);
   const [cleared, setCleared] = useState(false);
+  const [shuffles, setShuffles] = useState(SHUFFLES_PER_LEVEL);
   const [result, setResult] = useState<LevelResult | null>(null);
   const [bestTimes, setBestTimes] = useState<(number | null)[]>(() => CITIES.map(() => null));
 
@@ -56,8 +59,8 @@ export function useGame() {
   const city = CITIES[selectedIdx];
 
   // Fresh values for timeouts/pointer handlers (avoids stale closures)
-  const live = useRef({ deck, matched, paused, timeLeft, selectedIdx, coins, bestTimes });
-  live.current = { deck, matched, paused, timeLeft, selectedIdx, coins, bestTimes };
+  const live = useRef({ deck, matched, paused, timeLeft, selectedIdx, coins, bestTimes, shuffles, cleared });
+  live.current = { deck, matched, paused, timeLeft, selectedIdx, coins, bestTimes, shuffles, cleared };
   const mistakes = useRef(0); // wrong pairs in the current level, used for accuracy
   const flippedRef = useRef<string[]>([]); // synchronous mirror so two quick taps / a drag-drop both register
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -82,6 +85,7 @@ export function useGame() {
     setHinted(null);
     setTimeLeft(LEVEL_SECONDS);
     setCleared(false);
+    setShuffles(SHUFFLES_PER_LEVEL);
     setResult(null);
     mistakes.current = 0;
     setPaused(false);
@@ -100,6 +104,14 @@ export function useGame() {
     setScreen('map');
   };
   const restartLevel = () => loadLevel(selectedIdx);
+
+  /** Tap a level on the map: select it and start playing right away. */
+  const playLevel = (idx: number) => {
+    if (idx > unlockedIdx) return showToast(`Clear Level ${idx} to unlock ${CITIES[idx].venue}!`);
+    setSelectedIdx(idx);
+    setScreen('game');
+    loadLevel(idx);
+  };
 
   const selectCity = (idx: number) => {
     if (idx <= unlockedIdx) setSelectedIdx(idx);
@@ -194,14 +206,27 @@ export function useGame() {
   const canStartDrag = () => flippedRef.current.length === 0 && !live.current.paused;
 
   const requestHint = () => {
-    if (live.current.coins < 20) return showToast('Not enough coins!');
+    if (live.current.coins < HINT_COST) return showToast('Not enough coins!');
     const pair = city.pairs.find((p) => !live.current.matched.includes(p.id));
     if (!pair) return;
-    setCoins((c) => c - 20);
+    setCoins((c) => c - HINT_COST);
     speak(pair.german);
     setHinted(pair.id);
     setTimeout(() => setHinted(null), 1800);
     showToast(`Hint: Match "${pair.german}"! 🎧`);
+  };
+
+  /** Re-deal the cards that are still face-down. Matched cards stay in their (empty) slots. */
+  const shuffleBoard = () => {
+    const L = live.current;
+    if (L.paused || L.cleared || L.shuffles <= 0 || flippedRef.current.length > 0) return;
+    const open = L.deck.reduce<number[]>((acc, c, i) => (L.matched.includes(c.pairId) ? acc : [...acc, i]), []);
+    if (open.length < 2) return;
+    const mixed = shuffle(open.map((i) => L.deck[i]));
+    setDeck(L.deck.map((c, i) => (open.includes(i) ? mixed[open.indexOf(i)] : c)));
+    setShuffles((n) => n - 1);
+    getAudio().sfx.playFlip();
+    showToast('Cards shuffled! 🔀');
   };
 
   const share = () => {
@@ -252,11 +277,11 @@ export function useGame() {
   return {
     // state
     screen, city, cities: CITIES, unlockedIdx, selectedIdx, levelStars, coins, gems,
-    totalMatches, streak, deck, flipped, shaking, matched, hinted, timeLeft, paused,
+    totalMatches, streak, deck, flipped, shaking, matched, hinted, timeLeft, paused, shuffles,
     result, modal, toast, musicOn, voice,
     // actions
-    setModal, selectCity, startLevel, backToMap, restartLevel, flipCard, canStartDrag,
-    requestHint, share, pause, resume, continueAfterVictory, toggleMusic, speak,
+    setModal, selectCity, playLevel, notify: showToast, startLevel, backToMap, restartLevel, flipCard, canStartDrag,
+    requestHint, shuffleBoard, share, pause, resume, continueAfterVictory, toggleMusic, speak,
   };
 }
 

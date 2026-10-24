@@ -1,151 +1,120 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { GameApi } from '@/hooks/useGame';
+import { MAP_WIDTH, buildMapLayout } from '../lib/mapLayout';
+import { ArrowLeftIcon, CoinIcon, GemIcon } from './icons';
+import LevelNode from './LevelNode';
+import { Fern, PathArt, Rock, Tree, WelcomeSign } from './MapScenery';
+import StatPill from './StatPill';
+import TabBar from './TabBar';
 
-const PAGE_SIZE = 5;
+const pct = (x: number) => `${(x / MAP_WIDTH) * 100}%`;
 
 export default function MapScreen({ game }: { game: GameApi }) {
-  const { cities, city, unlockedIdx, selectedIdx, levelStars, coins, gems, musicOn } = game;
+  const { cities, unlockedIdx, selectedIdx, levelStars, coins, gems, musicOn } = game;
 
-  const pageCount = Math.ceil(cities.length / PAGE_SIZE);
-  const selectedPage = Math.floor(selectedIdx / PAGE_SIZE);
-  const [page, setPage] = useState(selectedPage);
-  // Follow the selection (e.g. after clearing a level, the next one may be on the next page)
-  useEffect(() => setPage(selectedPage), [selectedPage]);
-  const start = page * PAGE_SIZE;
+  const layout = useMemo(() => buildMapLayout(cities.length), [cities.length]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const firstScroll = useRef(true);
+
+  // Keep the selected level in view (instantly the first time, smoothly afterwards)
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const top = Math.max(0, layout.nodes[selectedIdx].y - el.clientHeight * 0.62);
+    if (firstScroll.current || typeof el.scrollTo !== 'function') el.scrollTop = top;
+    else el.scrollTo({ top, behavior: 'smooth' });
+    firstScroll.current = false;
+  }, [selectedIdx, layout]);
+
+  const selected = layout.nodes[selectedIdx];
+  const mascotOnLeft = selected.x > 135; // stand on the roomier side of the level, facing it
 
   return (
-    <section className="w-full h-full flex flex-col justify-between flex-grow relative z-10">
-      {/* Header */}
-      <header className="flex items-center justify-between text-white bg-slate-900/60 backdrop-blur-md p-3 rounded-2xl border border-white/20 shadow-lg">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">🗺️</span>
-          <div>
-            <h1 className="text-sm font-black tracking-wide text-amber-300 uppercase leading-none">German Express</h1>
-            <span className="text-[10px] text-slate-300 font-semibold">City Travel Map</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={game.toggleMusic}
-            title="Music on/off"
-            className={`w-7 h-7 rounded-full bg-slate-950/60 border border-cyan-400/50 flex items-center justify-center text-xs active:scale-95 transition ${musicOn ? '' : 'opacity-60'}`}
-          >
-            {musicOn ? '🎵' : '🔇'}
-          </button>
-          <div className="bg-slate-950/60 px-2.5 py-1 rounded-full border border-amber-400/40 flex items-center gap-1">
-            <span className="text-xs">🪙</span>
-            <span className="font-mono font-bold text-xs text-amber-300">{coins}</span>
-          </div>
-          <div className="bg-slate-950/60 px-2.5 py-1 rounded-full border border-pink-400/40 flex items-center gap-1">
-            <span className="text-xs">💎</span>
-            <span className="font-mono font-bold text-xs text-pink-300">{gems}</span>
-          </div>
-        </div>
-      </header>
+    <section className="absolute inset-0 flex flex-col">
+      <div className="relative min-h-0 flex-1">
+        <div ref={scrollRef} className="no-scrollbar absolute inset-0 overflow-y-auto overscroll-contain">
+          <div className="map-grass relative w-full overflow-hidden" style={{ height: layout.height }}>
+            <PathArt layout={layout} />
 
-      {/* Page switcher */}
-      <div className="flex items-center justify-between mt-3 text-xs font-bold text-white">
-        <button
-          aria-label="Previous levels"
-          disabled={page === 0}
-          onClick={() => setPage((p) => p - 1)}
-          className="px-3 py-1 rounded-full bg-slate-900/60 border border-white/30 disabled:opacity-30"
-        >
-          ‹
-        </button>
-        <span className="text-amber-300">
-          Levels {start + 1}–{Math.min(start + PAGE_SIZE, cities.length)} of {cities.length}
-        </span>
-        <button
-          aria-label="Next levels"
-          disabled={page === pageCount - 1}
-          onClick={() => setPage((p) => p + 1)}
-          className="px-3 py-1 rounded-full bg-slate-900/60 border border-white/30 disabled:opacity-30"
-        >
-          ›
-        </button>
-      </div>
+            {layout.scenery.map((s, i) => {
+              const style: React.CSSProperties = {
+                left: pct(s.x - s.size / 2),
+                top: s.y,
+                width: pct(s.size),
+                transform: `translateY(-100%)${s.flip ? ' scaleX(-1)' : ''}`,
+              };
+              const cls = 'pointer-events-none absolute h-auto';
+              if (s.kind === 'tree') return <Tree key={i} shade={s.shade} className={cls} style={style} />;
+              return s.kind === 'rock' ? <Rock key={i} className={cls} style={style} /> : <Fern key={i} className={cls} style={style} />;
+            })}
 
-      {/* Map viewport */}
-      <div className="map-viewport relative flex-grow my-2 rounded-2xl border-2 border-cyan-500/40 overflow-hidden flex items-center justify-center min-h-[480px]">
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 360 480" preserveAspectRatio="none">
-          <path
-            d="M 60 420 Q 180 380 300 330 T 80 230 Q 180 160 280 120 T 180 40"
-            fill="none" stroke="#67e8f9" strokeWidth="4" strokeDasharray="8 8" opacity="0.95"
-            style={{ filter: 'drop-shadow(0 0 4px rgba(34,211,238,0.9))' }}
-          />
-        </svg>
+            <WelcomeSign text={`Welcome to ${cities[0].name}`} top={layout.nodes[0].y + 38} />
 
-        {cities.slice(start, start + PAGE_SIZE).map((c, i) => {
-          const idx = start + i; // real index in the full level list
-          const unlocked = idx <= unlockedIdx;
-          return (
-            <div
-              key={c.level}
-              onClick={() => game.selectCity(idx)}
-              className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition hover:scale-110"
-              style={{ left: `${c.pin.left}%`, top: `${c.pin.top}%` }}
-            >
-              <div
-                className={`w-14 h-14 rounded-2xl border-2 shadow-xl flex flex-col items-center justify-center font-black relative ${
-                  unlocked
-                    ? 'bg-gradient-to-b from-amber-300 to-amber-500 border-white text-slate-900'
-                    : 'bg-slate-800 border-slate-600 text-slate-400'
-                } ${idx === selectedIdx ? 'ring-4 ring-cyan-300/70' : ''}`}
-              >
-                <span className="text-lg">{c.icon}</span>
-                <span className="text-[9px] leading-tight">Lvl {c.level}</span>
-                <div
-                  className={`absolute -bottom-2 bg-slate-900/90 border px-1.5 rounded-full text-[9px] ${
-                    unlocked ? 'border-amber-300 text-amber-300 font-bold' : 'border-slate-700 text-slate-400'
-                  }`}
-                >
-                  {!unlocked ? '🔒' : levelStars[idx] > 0 ? `⭐ ${levelStars[idx]}` : 'READY'}
+            {cities.map((c, idx) => {
+              const locked = idx > unlockedIdx;
+              const p = layout.nodes[idx];
+              return (
+                <div key={c.level} className="absolute" style={{ left: pct(p.x), top: p.y }}>
+                  <LevelNode
+                    level={c.level}
+                    locked={locked}
+                    selected={idx === selectedIdx}
+                    stars={levelStars[idx]}
+                    theme={c.theme}
+                    label={locked ? `Level ${c.level}, locked` : `Play level ${c.level}`}
+                    onClick={() => (locked ? game.selectCity(idx) : game.playLevel(idx))}
+                  />
                 </div>
-              </div>
+              );
+            })}
+
+            {/* Mascot walks to the selected level */}
+            <div
+              data-testid="mascot"
+              data-level={selectedIdx + 1}
+              className="pointer-events-none absolute z-10 transition-all duration-700 ease-in-out"
+              style={{ left: pct(selected.x + (mascotOnLeft ? -112 : 52)), top: selected.y - 52 }}
+            >
               <span
-                className={`absolute top-14 left-1/2 -translate-x-1/2 max-w-[110px] truncate bg-slate-900/90 text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${
-                  unlocked ? 'text-amber-300 border-amber-400/50' : 'text-slate-300 border-slate-700'
-                }`}
+                aria-hidden
+                className="animate-mascot block text-6xl drop-shadow-lg"
+                style={{ transform: mascotOnLeft ? 'scaleX(-1)' : undefined }}
               >
-                {c.venue}
+                🐿️
               </span>
             </div>
-          );
-        })}
-
-        {/* Mascot (only on the page that contains the selected level) */}
-        {selectedPage === page && (
-          <div
-            className="absolute -translate-x-1/2 -translate-y-full transition-all duration-700 ease-in-out pointer-events-none animate-mascot z-20"
-            style={{ left: `${city.mascot.left}%`, top: `${city.mascot.top}%` }}
-          >
-            <div className="w-10 h-10 rounded-full bg-amber-300 border-2 border-slate-900 shadow-2xl flex items-center justify-center text-xl relative">
-              🐿️
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border border-slate-900" />
-            </div>
           </div>
-        )}
+        </div>
+
+        {/* Top bar floats over the map */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between p-3 pt-4">
+          <button
+            onClick={() => game.notify('Nothing to go back to yet')}
+            aria-label="Back"
+            className="pointer-events-auto h-8 w-12 drop-shadow-[0_2px_3px_rgba(0,0,0,0.5)] transition active:scale-90"
+          >
+            <ArrowLeftIcon className="h-full w-full" />
+          </button>
+          <div className="pointer-events-auto flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2">
+              <StatPill label="Coins" value={coins} icon={<CoinIcon className="h-full w-full" />} />
+              <StatPill label="Gems" value={gems} icon={<GemIcon className="h-full w-full" />} />
+            </div>
+            <button
+              onClick={game.toggleMusic}
+              aria-label="Music on/off"
+              title="Music on/off"
+              className={`flex h-7 w-7 items-center justify-center rounded-full border border-white/30 bg-slate-900/55 text-xs backdrop-blur-sm transition active:scale-95 ${musicOn ? '' : 'opacity-60'}`}
+            >
+              {musicOn ? '🎵' : '🔇'}
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Footer */}
-      <footer className="bg-slate-900/70 backdrop-blur-md p-3 rounded-2xl border border-white/20 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">SELECTED DESTINATION</span>
-          <h2 className="text-sm font-black text-amber-300 leading-tight truncate">
-            {city.venue} - Level {city.level}
-          </h2>
-        </div>
-        <button
-          onClick={game.startLevel}
-          className="flex-shrink-0 px-6 py-3 bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-slate-950 font-black rounded-2xl shadow-lg border-2 border-white transform active:scale-95 transition flex items-center gap-1.5 text-sm uppercase"
-        >
-          <span>PLAY LEVEL</span>
-          <span>➔</span>
-        </button>
-      </footer>
+      <TabBar active="journey" onSelect={(tab, label) => tab !== 'journey' && game.notify(`${label} is coming soon`)} />
     </section>
   );
 }

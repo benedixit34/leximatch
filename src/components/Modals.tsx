@@ -15,6 +15,12 @@ export function PauseModal({ game }: { game: GameApi }) {
           <button onClick={game.toggleMusic} className="w-full py-2.5 bg-slate-800 border-2 border-cyan-500/60 text-cyan-200 rounded-2xl transition">
             🎵 MUSIC: {game.musicOn ? 'ON' : 'OFF'}
           </button>
+          <button onClick={() => game.setModal('trophy')} className="w-full py-2.5 bg-slate-800 border-2 border-amber-500/60 text-amber-200 rounded-2xl transition">
+            🏆 STATS
+          </button>
+          <button onClick={game.share} className="w-full py-2.5 bg-slate-800 border-2 border-cyan-500/60 text-cyan-200 rounded-2xl transition">
+            🔗 SHARE
+          </button>
           <button onClick={game.restartLevel} className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 border-2 border-white text-white rounded-2xl transition">
             🔄 RESTART LEVEL
           </button>
@@ -48,7 +54,7 @@ export function TrophyModal({ game }: { game: GameApi }) {
             </div>
           ))}
         </div>
-        <button onClick={() => game.setModal(null)} className="w-full py-2.5 bg-slate-800 border-2 border-slate-600 text-white rounded-2xl font-bold">
+        <button onClick={() => game.setModal(game.paused ? 'pause' : null)} className="w-full py-2.5 bg-slate-800 border-2 border-slate-600 text-white rounded-2xl font-bold">
           CLOSE
         </button>
       </div>

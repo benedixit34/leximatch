@@ -1,8 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Card from './Card';
-import type { GameApi } from '@/hooks/useGame';
+import { CoinIcon, ClockIcon, GemIcon, HintIcon, PauseIcon, RestartIcon, StarShape } from './icons';
+import { GUIDE_SRC } from './LoadingScreen';
+import StatPill from './StatPill';
+import { HINT_COST, type GameApi } from '@/hooks/useGame';
 import { formatTime } from '@/lib/utils';
 import type { CardData } from '@/lib/types';
 
@@ -14,15 +17,49 @@ interface DragState {
   h: number;
 }
 
+/** Faint pictures on the card backs; they cycle across the board */
+const WATERMARKS = ['🎒', '🍎', '📖', '🎩', '🧳', '🍰', '🎁', '🕰️'];
+
+const TIP_SECONDS = 5;
+
+/** Glossy teal booster button with a count badge */
+function Booster({
+  label, badge, disabled, onClick, children,
+}: { label: string; badge: string | number; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="btn-teal relative flex h-14 w-[4.5rem] items-center justify-center rounded-[1.2rem] text-white transition active:translate-y-0.5 active:shadow-none"
+    >
+      {children}
+      <span className="absolute -right-1.5 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-teal-700 px-1 text-[11px] font-black text-white shadow">
+        {badge}
+      </span>
+    </button>
+  );
+}
+
 export default function GameScreen({ game }: { game: GameApi }) {
-  const { city, deck, flipped, shaking, matched, hinted, coins, gems, timeLeft } = game;
+  const { city, deck, flipped, shaking, matched, hinted, coins, gems, timeLeft, shuffles } = game;
   const [drag, setDrag] = useState<DragState | null>(null);
+
+  // The guide's tip: shown when a level starts (and when you tap her), then tucked away
+  const [tipVisible, setTipVisible] = useState(true);
+  const [tipNonce, setTipNonce] = useState(0);
+  useEffect(() => {
+    setTipVisible(true);
+    const t = setTimeout(() => setTipVisible(false), TIP_SECONDS * 1000);
+    return () => clearTimeout(t);
+  }, [city.level, tipNonce]);
 
   const total = city.pairs.length;
   const pct = (matched.length / total) * 100;
   const trayPairs = matched.map((id) => city.pairs.find((p) => p.id === id)!);
 
-  // Drag an image card onto its German word (or vice versa). A short press is just a tap.
+  // Drag a picture onto its German word (or vice versa). A short press is just a tap.
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>, card: CardData) => {
     if (!game.canStartDrag() || matched.includes(card.pairId)) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -51,155 +88,154 @@ export default function GameScreen({ game }: { game: GameApi }) {
   };
 
   return (
-    <section className="w-full h-full flex flex-col justify-between flex-grow relative z-10">
-      {/* Header */}
-      <header className="space-y-2 z-10">
-        <div className="flex items-center justify-between text-white drop-shadow">
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={game.backToMap}
-              title="Back to Map"
-              className="w-8 h-8 rounded-lg bg-slate-900/60 border border-white/30 flex items-center justify-center text-white text-xs hover:bg-slate-800 transition"
-            >
-              ⬅️
-            </button>
-            <div>
-              <span className="text-[10px] font-bold tracking-widest uppercase opacity-90 block leading-tight">{city.venue}</span>
-              <h1 className="text-xs font-black tracking-tight leading-none text-amber-300">Level {city.level}</h1>
+    <section className="relative z-10 flex h-full w-full flex-grow flex-col">
+      {/* HUD */}
+      <header className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span aria-hidden className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border-2 border-white/80 bg-white/85 text-xl shadow">
+              {city.icon}
+            </span>
+            <div className="min-w-0 leading-tight text-white drop-shadow">
+              <p className="max-w-[6.5rem] truncate text-[9px] font-bold uppercase tracking-normal opacity-90">{city.venue}</p>
+              <h1 className="text-base font-black">Level {city.level}</h1>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="bg-slate-900/50 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/30 flex items-center gap-1">
-              <span className="text-xs">🪙</span>
-              <span className="font-mono font-bold text-xs text-amber-300">{coins}</span>
-            </div>
-            <div className="bg-slate-900/50 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/30 flex items-center gap-1">
-              <span className="text-xs">💎</span>
-              <span className="font-mono font-bold text-xs text-pink-300">{gems}</span>
-            </div>
-            <div className="bg-slate-900/70 backdrop-blur-md px-2 py-0.5 rounded-full border border-amber-300/60 flex items-center gap-1">
-              <span className="text-xs">🕒</span>
-              <span className="font-mono font-bold text-xs text-white">{formatTime(timeLeft)}</span>
-            </div>
+          <div className="flex items-center gap-2 pl-1">
+            <StatPill label="Coins" value={coins} icon={<CoinIcon className="h-full w-full" />} />
+            <StatPill label="Gems" value={gems} icon={<GemIcon className="h-full w-full" />} />
+            <StatPill label="Time" value={formatTime(timeLeft)} icon={<ClockIcon className="h-full w-full" />} />
           </div>
         </div>
 
+        {/* Progress with 1 / 2 / 3-star milestones */}
         <div className="flex items-center gap-2">
-          <div className="flex-grow bg-slate-900/50 backdrop-blur-md h-8 rounded-full p-1 border-2 border-white/40 relative flex items-center shadow-inner overflow-hidden">
+          <div
+            role="progressbar"
+            aria-label="Level progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(pct)}
+            className="relative h-7 flex-grow overflow-hidden rounded-full border-2 border-white/75 bg-violet-300/60 shadow-inner backdrop-blur-sm"
+          >
             <div
-              className="h-full bg-gradient-to-r from-pink-500 via-rose-400 to-amber-400 rounded-full transition-all duration-500 relative glossy-pill"
+              className="glossy-pill h-full rounded-full bg-gradient-to-r from-fuchsia-600 to-pink-500 transition-all duration-500"
               style={{ width: `${pct}%` }}
             />
-            <div className="absolute inset-0 flex items-center justify-around px-4 pointer-events-none">
-              {[33, 66, 100].map((threshold) => (
-                <span
-                  key={threshold}
-                  className={`text-sm transition-all duration-300 transform ${pct >= threshold ? '' : 'grayscale scale-90'}`}
-                >
-                  ⭐
-                </span>
-              ))}
+            <div className="pointer-events-none absolute inset-0 flex">
+              {[1, 2, 3].map((n) => {
+                const earned = matched.length * 3 >= total * n;
+                return (
+                  <div key={n} className="flex flex-1 items-center justify-center gap-0.5" data-milestone={n} data-earned={earned}>
+                    {Array.from({ length: n }, (_, i) => (
+                      <StarShape key={i} earned={earned} className="h-4 w-4 drop-shadow-sm" />
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
           <button
             onClick={game.pause}
-            className="w-8 h-8 rounded-full bg-gradient-to-b from-cyan-400 to-cyan-600 border-2 border-white flex items-center justify-center text-white text-xs shadow-lg active:scale-95 transition"
+            aria-label="Pause"
+            className="btn-teal flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-white transition active:translate-y-0.5 active:shadow-none"
           >
-            ⏸️
+            <PauseIcon className="h-5 w-5" />
           </button>
         </div>
       </header>
 
-      {/* Matched tray */}
-      <section className="relative my-1.5 z-10">
-        <div className="absolute -top-5 right-2 z-20">
-          <div className="w-10 h-10 bg-amber-100 rounded-full border-2 border-amber-500 shadow-lg flex items-center justify-center text-xl relative">
-            🐿️
-            <span className="absolute -bottom-1 -right-1 bg-pink-500 text-[8px] text-white font-bold px-1 rounded-full border border-white">DE</span>
-          </div>
-        </div>
-        <div className="bg-slate-900/40 backdrop-blur-md rounded-2xl p-2 border-2 border-cyan-300/40 min-h-[72px] shadow-lg flex items-center">
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar w-full py-0.5 px-1">
+      {/* Matched pairs */}
+      <section className="relative mt-12">
+        <span aria-hidden className="pointer-events-none absolute -top-11 right-2 z-20 text-5xl drop-shadow-lg">🐿️</span>
+        <div className="flex min-h-[5.5rem] items-center rounded-xl border-2 border-white/80 bg-white/40 p-2 shadow-lg backdrop-blur-sm">
+          <div className="no-scrollbar flex w-full items-center gap-3 overflow-x-auto px-1">
             {trayPairs.length === 0 && (
-              <div className="w-full text-center text-xs font-semibold text-white/70 italic">
-                Match German words to pictures! 🎧🔊
-              </div>
+              <p className="w-full text-center text-xs font-semibold italic text-slate-700">Match German words to pictures! 🎧🔊</p>
             )}
             {trayPairs.map((pair) => (
-              <div
+              <button
                 key={pair.id}
                 onClick={() => game.speak(pair.german)}
-                className="flex-shrink-0 bg-gradient-to-r from-amber-100 to-amber-200 border border-amber-400 rounded-xl px-2 py-1 flex items-center gap-1.5 shadow-md cursor-pointer"
+                aria-label={`Hear ${pair.german}`}
+                className="relative h-[4.4rem] w-[4.6rem] flex-shrink-0"
               >
-                <div className="text-sm"><span className="text-3xl">{pair.emoji}</span></div>
-                <span className="font-bold text-[10px] text-slate-800 font-mono">{pair.german}</span>
-                <span className="text-[10px]">🔊</span>
-              </div>
+                {/* picture card behind, word card in front: a little stack */}
+                <span className="absolute right-0 top-0 flex h-[3.6rem] w-11 rotate-[8deg] items-center justify-center rounded-lg border-2 border-sky-300 bg-white text-2xl shadow-md">
+                  {pair.emoji}
+                </span>
+                <span className="absolute left-0 top-2 flex h-[3.6rem] w-11 -rotate-[6deg] items-center justify-center rounded-lg border-2 border-amber-300 bg-gradient-to-b from-amber-50 to-amber-200 px-0.5 text-center text-[10px] font-extrabold leading-tight text-slate-800 shadow-md">
+                  {pair.german}
+                </span>
+              </button>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Card grid */}
-      <main className="bg-slate-900/40 backdrop-blur-md rounded-2xl p-2.5 border-2 border-cyan-300/50 shadow-2xl flex-grow flex items-center justify-center my-1 z-10">
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 sm:gap-2.5 w-full max-w-sm">
-          {deck.map((card) => (
-            <Card
-              key={card.cardId}
-              card={card}
-              flipped={flipped.includes(card.cardId)}
-              matched={matched.includes(card.pairId)}
-              shaking={shaking.includes(card.cardId)}
-              hinted={hinted === card.pairId}
-              onFlip={game.flipCard}
-              onSpeak={game.speak}
-              onPointerDown={handlePointerDown}
-            />
-          ))}
+      {/* Board: 4 x 3 slots. Matched cards leave an empty, darker slot. */}
+      <main className="my-2 flex flex-grow items-center">
+        <div className="w-full overflow-hidden rounded-xl border-2 border-cyan-400 bg-slate-700/25 p-1 shadow-2xl backdrop-blur-sm">
+          <div className="grid grid-cols-4">
+            {deck.map((card, i) => {
+              const isMatched = matched.includes(card.pairId);
+              return (
+                <div
+                  key={card.cardId}
+                  className={`aspect-[5/6] border border-amber-100/25 p-1.5 ${isMatched ? 'bg-slate-900/30' : 'bg-slate-900/10'}`}
+                >
+                  <Card
+                    card={card}
+                    flipped={flipped.includes(card.cardId)}
+                    matched={isMatched}
+                    shaking={shaking.includes(card.cardId)}
+                    hinted={hinted === card.pairId}
+                    watermark={WATERMARKS[i % WATERMARKS.length]}
+                    onFlip={game.flipCard}
+                    onSpeak={game.speak}
+                    onPointerDown={handlePointerDown}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
       </main>
 
-      {/* Guide + actions */}
-      <footer className="flex items-end justify-between z-10 pt-1">
-        <div className="flex items-center gap-2 max-w-[70%]">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-b from-indigo-500 to-purple-700 border-[3px] border-cyan-300 shadow-xl flex-shrink-0 flex items-center justify-center text-2xl overflow-hidden">
-            👩🏽‍🦱
-          </div>
-          <div className="bg-slate-900/90 border border-cyan-400/60 rounded-2xl p-2 shadow-lg">
-            <p className="text-[10px] sm:text-xs text-amber-200 font-medium leading-tight">{city.speechTip}</p>
-          </div>
+      {/* Bottom bar: guide + boosters (bleeds to the edges of the screen) */}
+      <footer className="relative -mx-3 -mb-3 flex items-center justify-between rounded-t-[2rem] border-t-2 border-indigo-400/40 bg-gradient-to-b from-indigo-900 to-indigo-950 px-5 pb-5 pt-3 sm:-mx-4 sm:-mb-4">
+        {/* The guide's tip appears above the bar */}
+        <div
+          role="status"
+          className={`pointer-events-none absolute bottom-full left-4 right-4 mb-2 transition-opacity duration-500 ${tipVisible ? 'opacity-100' : 'opacity-0'}`}
+        >
+          <p className="ml-16 rounded-2xl border border-cyan-400/60 bg-slate-900/90 p-2.5 text-xs font-medium leading-tight text-amber-200 shadow-lg">
+            {city.speechTip}
+          </p>
         </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={game.requestHint}
-            title="Hint (-20 Coins)"
-            className="w-10 h-10 rounded-full bg-gradient-to-b from-amber-400 to-amber-600 border-2 border-white flex items-center justify-center text-slate-950 text-base shadow-lg active:scale-95 transition"
-          >
-            💡
-          </button>
-          <button
-            onClick={() => game.setModal('trophy')}
-            title="Trophy Stats"
-            className="w-10 h-10 rounded-full bg-gradient-to-b from-cyan-400 to-cyan-600 border-2 border-white flex items-center justify-center text-white text-base shadow-lg active:scale-95 transition"
-          >
-            🏆
-          </button>
-          <button
-            onClick={game.share}
-            title="Share Game"
-            className="w-10 h-10 rounded-full bg-gradient-to-b from-cyan-400 to-cyan-600 border-2 border-white flex items-center justify-center text-white text-base shadow-lg active:scale-95 transition"
-          >
-            🔗
-          </button>
+
+        <button
+          onClick={() => setTipNonce((n) => n + 1)}
+          aria-label="Show the guide's tip"
+          className="relative -mt-9 h-[4.5rem] w-[4.5rem] overflow-hidden rounded-2xl border-[3px] border-cyan-300 bg-gradient-to-b from-indigo-400 to-purple-700 shadow-xl"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={GUIDE_SRC} alt="" className="h-full w-full object-cover object-top" />
+        </button>
+
+        <div className="flex items-center gap-5">
+          <Booster label={`Hint (costs ${HINT_COST} coins)`} badge={HINT_COST} onClick={game.requestHint}>
+            <HintIcon className="h-8 w-8" />
+          </Booster>
+          <Booster label="Shuffle cards" badge={shuffles} disabled={shuffles <= 0} onClick={game.shuffleBoard}>
+            <RestartIcon className="h-7 w-7" />
+          </Booster>
         </div>
       </footer>
 
       {/* Drag preview */}
       {drag && (
-        <div
-          className="drag-ghost"
-          style={{ left: drag.x - drag.w / 2, top: drag.y - drag.h / 2, width: drag.w, height: drag.h }}
-        >
+        <div className="drag-ghost" style={{ left: drag.x - drag.w / 2, top: drag.y - drag.h / 2, width: drag.w, height: drag.h }}>
           <Card card={drag.card} flipped matched={false} ghost />
         </div>
       )}
